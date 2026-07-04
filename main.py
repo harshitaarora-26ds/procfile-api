@@ -18,7 +18,7 @@ from typing import Optional
 from fastapi import FastAPI, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 # --------------------------------------------------------------------------
 # Config
@@ -34,7 +34,7 @@ app = FastAPI(title="Orders API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -65,9 +65,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     Buckets requests per X-Client-Id header. Requests without this header
     are not rate limited. Uses a sliding-window log so exactly RATE_LIMIT
     requests are allowed in any trailing RATE_WINDOW_SECONDS window.
+    CORS preflight (OPTIONS) requests are always passed through untouched.
     """
 
     async def dispatch(self, request: Request, call_next):
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         client_id = request.headers.get("x-client-id")
 
         if client_id:
@@ -105,6 +109,16 @@ app.add_middleware(RateLimitMiddleware)
 @app.get("/")
 async def root():
     return {"status": "ok", "service": "orders-api"}
+
+
+@app.options("/{rest_of_path:path}")
+async def cors_preflight_fallback(rest_of_path: str):
+    """
+    Explicit catch-all OPTIONS handler so CORS preflight requests always
+    get a clean 200 response (with CORS headers added by CORSMiddleware),
+    regardless of whether a route defines OPTIONS itself.
+    """
+    return Response(status_code=200)
 
 
 @app.post("/orders", status_code=201)
