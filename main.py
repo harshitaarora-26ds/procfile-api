@@ -106,7 +106,7 @@ app.add_middleware(RateLimitMiddleware)
 # Routes
 # --------------------------------------------------------------------------
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {"status": "ok", "service": "orders-api"}
 
