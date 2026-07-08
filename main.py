@@ -31,14 +31,6 @@ DEFAULT_PAGE_LIMIT = 10
 
 app = FastAPI(title="Orders API")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # --------------------------------------------------------------------------
 # In-memory state
 # --------------------------------------------------------------------------
@@ -66,6 +58,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     are not rate limited. Uses a sliding-window log so exactly RATE_LIMIT
     requests are allowed in any trailing RATE_WINDOW_SECONDS window.
     CORS preflight (OPTIONS) requests are always passed through untouched.
+
+    NOTE: this middleware must be added to the app BEFORE CORSMiddleware
+    (i.e. CORSMiddleware must be the outermost layer). Starlette wraps
+    middleware in the reverse order they're added, so whichever is added
+    last runs first on the way in / last on the way out. If this
+    middleware were outermost, its short-circuited 429 responses would
+    never pass through CORSMiddleware and would be missing CORS headers
+    entirely — which browsers then refuse to let JS read cross-origin,
+    surfacing as a generic "Failed to fetch" on the client.
     """
 
     async def dispatch(self, request: Request, call_next):
@@ -99,7 +100,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+# Add RateLimitMiddleware first, then CORSMiddleware last, so CORSMiddleware
+# ends up as the OUTERMOST layer and adds headers to every response —
+# including RateLimitMiddleware's short-circuited 429s.
 app.add_middleware(RateLimitMiddleware)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # --------------------------------------------------------------------------
