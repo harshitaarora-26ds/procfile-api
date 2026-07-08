@@ -111,6 +111,13 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Browsers only let JS read a small default safelist of response headers
+    # (Content-Type, Content-Length, etc.) unless the server explicitly
+    # exposes others via Access-Control-Expose-Headers. Retry-After isn't
+    # in that default safelist, so without this, a browser-side check like
+    # `response.headers.get('retry-after')` sees null even though the header
+    # is genuinely present on the wire.
+    expose_headers=["Retry-After"],
 )
 
 
